@@ -1,0 +1,151 @@
+'use client';
+
+import React, { useState } from 'react';
+import Link from 'next/navigation';
+import NextLink from 'next/link';
+import { usePathname } from 'next/navigation';
+import {
+  LayoutDashboard,
+  Users,
+  GraduationCap,
+  ClipboardList,
+  LogOut,
+  Menu,
+  X,
+  ShieldCheck,
+} from 'lucide-react';
+import { useAuth } from '@/lib/auth';
+
+const NAV_ITEMS = [
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Users', href: '/users', icon: Users },
+  { name: 'Classes', href: '/classes', icon: GraduationCap },
+  { name: 'Results', href: '/results', icon: ClipboardList },
+];
+
+export default function Sidebar() {
+  const pathname = usePathname();
+  const { logout } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // If on login page, do not render sidebar
+  if (pathname === '/') {
+    return null;
+  }
+
+  const navContent = (
+    <div className="flex flex-col h-full bg-white select-none">
+      {/* Brand Header */}
+      <div className="px-6 py-6 border-b border-gray-200 flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-[#A22538]">
+              Kinford
+            </h1>
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#FEF7E8] text-[#B8860B] border border-[#EEB540]/30">
+              Admin
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 font-medium mt-0.5 tracking-wide">
+            Student Portal
+          </p>
+        </div>
+        {/* Mobile close button */}
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+          aria-label="Close navigation"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Navigation Links */}
+      <nav className="flex-1 py-6 space-y-1.5 overflow-y-auto">
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+          return (
+            <NextLink
+              key={item.name}
+              href={item.href}
+              onClick={() => setMobileOpen(false)}
+              className={`flex items-center gap-3.5 px-6 py-3.5 text-sm font-medium transition-all ${
+                isActive
+                  ? 'text-[#A22538] border-l-4 border-[#A22538] bg-[#FFF1F3] font-semibold'
+                  : 'text-gray-600 hover:text-[#A22538] hover:bg-gray-50 border-l-4 border-transparent'
+              }`}
+            >
+              <Icon
+                className={`w-5 h-5 transition-colors ${
+                  isActive ? 'text-[#A22538]' : 'text-gray-500 group-hover:text-[#A22538]'
+                }`}
+              />
+              <span>{item.name}</span>
+            </NextLink>
+          );
+        })}
+      </nav>
+
+      {/* Admin Status Pill */}
+      <div className="px-6 py-3">
+        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-600">
+          <ShieldCheck className="w-4 h-4 text-[#EEB540] flex-shrink-0" />
+          <div className="truncate">
+            <p className="font-semibold text-gray-800 truncate">Portal Administrator</p>
+            <p className="text-[11px] text-gray-500">Full Access</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Logout Button */}
+      <div className="p-4 border-t border-gray-200">
+        <button
+          onClick={logout}
+          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:text-[#A22538] hover:bg-red-50/50 transition-colors"
+        >
+          <LogOut className="w-4 h-4 text-gray-500" />
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Mobile Top Header with Hamburger */}
+      <header className="md:hidden sticky top-0 z-40 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">
+        <div>
+          <span className="text-xl font-bold text-[#A22538]">Kinford</span>
+          <span className="text-xs text-gray-500 ml-2">Student Portal</span>
+        </div>
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+          aria-label="Open navigation menu"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+      </header>
+
+      {/* Desktop Sidebar (Fixed, ~250px wide) */}
+      <aside className="hidden md:flex flex-col w-[250px] fixed inset-y-0 left-0 bg-white border-r border-gray-200 z-30 shadow-sm">
+        {navContent}
+      </aside>
+
+      {/* Mobile Drawer Backdrop and Sidebar */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setMobileOpen(false)}
+          />
+          <div className="relative flex-1 max-w-[270px] w-full bg-white h-full shadow-2xl z-10 animate-in slide-in-from-left duration-200">
+            {navContent}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
