@@ -32,13 +32,14 @@ const AUTH_KEY = 'kinford_admin_auth';
 const USER_KEY = 'kinford_user_session';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
+    // Read session synchronously from localStorage on client mount
     const authStatus = localStorage.getItem(AUTH_KEY);
     const sessionData = localStorage.getItem(USER_KEY);
 
@@ -53,17 +54,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUser({ name: 'Portal Admin', role: 'admin' });
       }
+
+      if (pathname === '/') {
+        router.replace('/dashboard');
+      }
     } else {
       setIsAuthenticated(false);
       setUser(null);
-    }
-    setIsLoading(false);
-
-    // Route protection logic
-    if (authStatus !== 'true' && pathname !== '/') {
-      router.replace('/');
-    } else if (authStatus === 'true' && pathname === '/') {
-      router.replace('/dashboard');
+      if (pathname !== '/') {
+        router.replace('/');
+      }
     }
   }, [pathname, router]);
 
