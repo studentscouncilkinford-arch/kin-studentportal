@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { ResultItem, StudentItem, ClassItem } from '@/types/database';
+import type { ResultItem, UserItem, ClassItem } from '@/types/database';
 import DataTable, { Column } from '@/components/DataTable';
 import Modal from '@/components/Modal';
 import { calculateGrade } from '@/lib/utils';
@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 
 export default function ResultsPage() {
   const [results, setResults] = useState<ResultItem[]>([]);
-  const [students, setStudents] = useState<StudentItem[]>([]);
+  const [students, setStudents] = useState<UserItem[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -48,7 +48,7 @@ export default function ResultsPage() {
   const [isGradeManual, setIsGradeManual] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch results with students & classes join
+  // Fetch results with students (users) & classes join
   const fetchResults = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -62,10 +62,10 @@ export default function ResultsPage() {
           grade,
           date,
           created_at,
-          students (
+          students:users (
             id,
             name,
-            roll_number,
+            email,
             class_id,
             classes (
               id,
@@ -90,13 +90,13 @@ export default function ResultsPage() {
   const fetchStudents = useCallback(async () => {
     try {
       const { data, error } = await supabase
-        .from('students')
+        .from('users')
         .select(`
           id,
           name,
-          roll_number,
+          email,
           class_id,
-          status,
+          user_type,
           created_at,
           classes (
             id,
@@ -104,10 +104,11 @@ export default function ResultsPage() {
             section
           )
         `)
+        .eq('user_type', 'student')
         .order('name', { ascending: true });
 
       if (error) throw error;
-      setStudents((data as unknown as StudentItem[]) || []);
+      setStudents((data as unknown as UserItem[]) || []);
     } catch (err: unknown) {
       console.error('Failed to fetch students:', err);
     }
@@ -161,9 +162,9 @@ export default function ResultsPage() {
       if (searchStudentQuery.trim()) {
         const q = searchStudentQuery.toLowerCase();
         const studentName = res.students?.name?.toLowerCase() || '';
-        const rollNumber = res.students?.roll_number?.toLowerCase() || '';
+        const email = res.students?.email?.toLowerCase() || '';
         const subject = res.subject.toLowerCase();
-        if (!studentName.includes(q) && !rollNumber.includes(q) && !subject.includes(q)) {
+        if (!studentName.includes(q) && !email.includes(q) && !subject.includes(q)) {
           return false;
         }
       }
@@ -329,9 +330,9 @@ export default function ResultsPage() {
             <p className="font-semibold text-gray-900">
               {res.students?.name || 'Unknown Student'}
             </p>
-            {res.students?.roll_number && (
+            {res.students?.email && (
               <p className="text-[11px] text-gray-400 font-mono">
-                {res.students.roll_number}
+                {res.students.email}
               </p>
             )}
           </div>
@@ -537,8 +538,7 @@ export default function ResultsPage() {
               <option value="">Select a student...</option>
               {students.map((st) => (
                 <option key={st.id} value={st.id}>
-                  {st.name} {st.roll_number ? `(${st.roll_number})` : ''} -{' '}
-                  {st.classes?.name || 'No Class'}
+                  {st.name} ({st.email}) - {st.classes?.name || 'No Class'}
                 </option>
               ))}
             </select>
@@ -657,7 +657,7 @@ export default function ResultsPage() {
               <option value="">Select a student...</option>
               {students.map((st) => (
                 <option key={st.id} value={st.id}>
-                  {st.name} {st.roll_number ? `(${st.roll_number})` : ''}
+                  {st.name} ({st.email})
                 </option>
               ))}
             </select>

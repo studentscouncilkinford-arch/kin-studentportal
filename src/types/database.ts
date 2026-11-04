@@ -6,7 +6,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export type StudentStatus = 'active' | 'inactive';
+export type UserType = 'student' | 'staff';
 
 export interface ClassItem {
   id: string;
@@ -16,12 +16,15 @@ export interface ClassItem {
   student_count?: number;
 }
 
-export interface StudentItem {
+export interface UserItem {
   id: string;
   name: string;
+  email: string;
+  password_hash: string;
+  user_type: UserType;
   class_id: string | null;
-  roll_number: string | null;
-  status: StudentStatus;
+  access_classes: boolean;
+  access_results: boolean;
   created_at: string;
   classes?: {
     id: string;
@@ -41,7 +44,7 @@ export interface ResultItem {
   students?: {
     id: string;
     name: string;
-    roll_number: string | null;
+    email?: string;
     class_id: string | null;
     classes?: {
       id: string;
@@ -75,34 +78,43 @@ export interface Database {
         };
         Relationships: [];
       };
-      students: {
+      users: {
         Row: {
           id: string;
           name: string;
+          email: string;
+          password_hash: string;
+          user_type: UserType;
           class_id: string | null;
-          roll_number: string | null;
-          status: 'active' | 'inactive';
+          access_classes: boolean;
+          access_results: boolean;
           created_at: string;
         };
         Insert: {
           id?: string;
           name: string;
+          email: string;
+          password_hash: string;
+          user_type: UserType;
           class_id?: string | null;
-          roll_number?: string | null;
-          status?: 'active' | 'inactive';
+          access_classes?: boolean;
+          access_results?: boolean;
           created_at?: string;
         };
         Update: {
           id?: string;
           name?: string;
+          email?: string;
+          password_hash?: string;
+          user_type?: UserType;
           class_id?: string | null;
-          roll_number?: string | null;
-          status?: 'active' | 'inactive';
+          access_classes?: boolean;
+          access_results?: boolean;
           created_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "students_class_id_fkey";
+            foreignKeyName: "users_class_id_fkey";
             columns: ["class_id"];
             isOneToOne: false;
             referencedRelation: "classes";
@@ -143,7 +155,7 @@ export interface Database {
             foreignKeyName: "results_student_id_fkey";
             columns: ["student_id"];
             isOneToOne: false;
-            referencedRelation: "students";
+            referencedRelation: "users";
             referencedColumns: ["id"];
           }
         ];

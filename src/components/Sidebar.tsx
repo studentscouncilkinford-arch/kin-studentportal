@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/navigation';
 import NextLink from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -13,25 +12,51 @@ import {
   Menu,
   X,
   ShieldCheck,
+  UserCheck,
+  Briefcase,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
-const NAV_ITEMS = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Users', href: '/users', icon: Users },
-  { name: 'Classes', href: '/classes', icon: GraduationCap },
-  { name: 'Results', href: '/results', icon: ClipboardList },
-];
-
 export default function Sidebar() {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // If on login page, do not render sidebar
   if (pathname === '/') {
     return null;
   }
+
+  const role = user?.role || 'admin';
+
+  // Role-based navigation filtering
+  const navItems = [
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, visible: true },
+    {
+      name: 'Users',
+      href: '/users',
+      icon: Users,
+      visible: role === 'admin',
+    },
+    {
+      name: 'Classes',
+      href: '/classes',
+      icon: GraduationCap,
+      visible: role === 'admin' || (role === 'staff' && !!user?.access_classes),
+    },
+    {
+      name: 'Results',
+      href: '/results',
+      icon: ClipboardList,
+      visible: role === 'admin' || role === 'student' || (role === 'staff' && !!user?.access_results),
+    },
+  ].filter((item) => item.visible);
+
+  const roleBadge = {
+    admin: { label: 'Admin', color: 'bg-[#FEF7E8] text-[#B8860B] border-[#EEB540]/30' },
+    staff: { label: 'Staff', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    student: { label: 'Student', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  }[role];
 
   const navContent = (
     <div className="flex flex-col h-full bg-white select-none">
@@ -42,8 +67,10 @@ export default function Sidebar() {
             <h1 className="text-2xl font-bold tracking-tight text-[#A22538]">
               Kinford
             </h1>
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#FEF7E8] text-[#B8860B] border border-[#EEB540]/30">
-              Admin
+            <span
+              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${roleBadge.color}`}
+            >
+              {roleBadge.label}
             </span>
           </div>
           <p className="text-xs text-gray-500 font-medium mt-0.5 tracking-wide">
@@ -62,7 +89,7 @@ export default function Sidebar() {
 
       {/* Navigation Links */}
       <nav className="flex-1 py-6 space-y-1.5 overflow-y-auto">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
@@ -88,13 +115,23 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Admin Status Pill */}
+      {/* User Session Status Pill */}
       <div className="px-6 py-3">
-        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-600">
-          <ShieldCheck className="w-4 h-4 text-[#EEB540] flex-shrink-0" />
+        <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-600">
+          {role === 'admin' ? (
+            <ShieldCheck className="w-4 h-4 text-[#EEB540] flex-shrink-0" />
+          ) : role === 'staff' ? (
+            <Briefcase className="w-4 h-4 text-blue-600 flex-shrink-0" />
+          ) : (
+            <UserCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+          )}
           <div className="truncate">
-            <p className="font-semibold text-gray-800 truncate">Portal Administrator</p>
-            <p className="text-[11px] text-gray-500">Full Access</p>
+            <p className="font-semibold text-gray-800 truncate">
+              {user?.name || 'Administrator'}
+            </p>
+            <p className="text-[11px] text-gray-500 capitalize">
+              {role === 'admin' ? 'Master Access' : `${role} account`}
+            </p>
           </div>
         </div>
       </div>

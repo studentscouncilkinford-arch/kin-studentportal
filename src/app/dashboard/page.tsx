@@ -28,7 +28,7 @@ export default function DashboardPage() {
     setIsLoading(true);
     try {
       const [studentsRes, classesRes, resultsRes] = await Promise.all([
-        supabase.from('students').select('*', { count: 'exact', head: true }),
+        supabase.from('users').select('*', { count: 'exact', head: true }).eq('user_type', 'student'),
         supabase.from('classes').select('*', { count: 'exact', head: true }),
         supabase.from('results').select('*', { count: 'exact', head: true }),
       ]);

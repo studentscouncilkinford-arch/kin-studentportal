@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { ClassItem, StudentItem } from '@/types/database';
+import type { ClassItem, UserItem } from '@/types/database';
 import Modal from '@/components/Modal';
 import {
   GraduationCap,
@@ -32,7 +32,7 @@ export default function ClassesPage() {
   const [isViewStudentsModalOpen, setIsViewStudentsModalOpen] = useState(false);
 
   const [selectedClass, setSelectedClass] = useState<ClassWithCount | null>(null);
-  const [classStudents, setClassStudents] = useState<StudentItem[]>([]);
+  const [classStudents, setClassStudents] = useState<UserItem[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
 
   // Form states
@@ -56,8 +56,9 @@ export default function ClassesPage() {
 
       // Fetch students count per class
       const { data: studentsData, error: studentsError } = await supabase
-        .from('students')
-        .select('class_id');
+        .from('users')
+        .select('class_id')
+        .eq('user_type', 'student');
 
       if (studentsError) throw studentsError;
 
@@ -95,13 +96,14 @@ export default function ClassesPage() {
 
     try {
       const { data, error } = await supabase
-        .from('students')
+        .from('users')
         .select('*')
         .eq('class_id', cls.id)
+        .eq('user_type', 'student')
         .order('name', { ascending: true });
 
       if (error) throw error;
-      setClassStudents((data as unknown as StudentItem[]) || []);
+      setClassStudents((data as unknown as UserItem[]) || []);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load class students';
       toast.error(message);
@@ -390,19 +392,13 @@ export default function ClassesPage() {
                         {student.name}
                       </p>
                       <p className="text-xs text-gray-400 font-mono">
-                        Roll: {student.roll_number || 'N/A'}
+                        {student.email}
                       </p>
                     </div>
                   </div>
 
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                      student.status === 'active'
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    {student.status === 'active' ? 'Active' : 'Inactive'}
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Student
                   </span>
                 </div>
               ))}
