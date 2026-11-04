@@ -8,18 +8,20 @@ import {
   Users,
   GraduationCap,
   ClipboardList,
+  Trophy,
   LogOut,
   Menu,
   X,
   ShieldCheck,
   UserCheck,
   Briefcase,
+  Home,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { session, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // If on login page, do not render sidebar
@@ -27,36 +29,52 @@ export default function Sidebar() {
     return null;
   }
 
-  const role = user?.role || 'admin';
+  const role = session?.type || 'admin';
 
-  // Role-based navigation filtering
-  const navItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, visible: true },
-    {
-      name: 'Users',
-      href: '/users',
-      icon: Users,
-      visible: role === 'admin',
-    },
-    {
-      name: 'Classes',
-      href: '/classes',
-      icon: GraduationCap,
-      visible: role === 'admin' || (role === 'staff' && !!user?.access_classes),
-    },
-    {
-      name: 'Results',
-      href: '/results',
-      icon: ClipboardList,
-      visible: role === 'admin' || role === 'student' || (role === 'staff' && !!user?.access_results),
-    },
-  ].filter((item) => item.visible);
+  // Navigation Items per role
+  let navItems: { name: string; href: string; icon: React.ElementType }[] = [];
+
+  if (role === 'student') {
+    navItems = [
+      { name: 'Dashboard', href: '/student-dashboard', icon: Home },
+      { name: 'My Results', href: '/student-dashboard/results', icon: ClipboardList },
+      { name: 'Achievements', href: '/student-dashboard/achievements', icon: Trophy },
+    ];
+  } else if (role === 'staff') {
+    navItems = [
+      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      ...(session && 'accessClasses' in session && session.accessClasses
+        ? [{ name: 'Classes', href: '/classes', icon: GraduationCap }]
+        : []),
+      ...(session && 'accessResults' in session && session.accessResults
+        ? [{ name: 'Results', href: '/results', icon: ClipboardList }]
+        : []),
+    ];
+  } else {
+    // Admin
+    navItems = [
+      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'Users', href: '/users', icon: Users },
+      { name: 'Classes', href: '/classes', icon: GraduationCap },
+      { name: 'Results', href: '/results', icon: ClipboardList },
+    ];
+  }
 
   const roleBadge = {
     admin: { label: 'Admin', color: 'bg-[#FEF7E8] text-[#B8860B] border-[#EEB540]/30' },
     staff: { label: 'Staff', color: 'bg-blue-50 text-blue-700 border-blue-200' },
     student: { label: 'Student', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   }[role];
+
+  const userName =
+    session && 'name' in session ? session.name : role === 'admin' ? 'Portal Administrator' : 'User';
+
+  const userSubtitle =
+    role === 'admin'
+      ? 'Full Access'
+      : role === 'staff'
+      ? 'Staff Account'
+      : 'Student Account';
 
   const navContent = (
     <div className="flex flex-col h-full bg-white select-none">
@@ -91,7 +109,11 @@ export default function Sidebar() {
       <nav className="flex-1 py-6 space-y-1.5 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const isActive =
+            pathname === item.href ||
+            (item.href !== '/dashboard' &&
+              item.href !== '/student-dashboard' &&
+              pathname.startsWith(`${item.href}/`));
 
           return (
             <NextLink
@@ -126,12 +148,8 @@ export default function Sidebar() {
             <UserCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
           )}
           <div className="truncate">
-            <p className="font-semibold text-gray-800 truncate">
-              {user?.name || 'Administrator'}
-            </p>
-            <p className="text-[11px] text-gray-500 capitalize">
-              {role === 'admin' ? 'Master Access' : `${role} account`}
-            </p>
+            <p className="font-semibold text-gray-800 truncate">{userName}</p>
+            <p className="text-[11px] text-gray-500 capitalize">{userSubtitle}</p>
           </div>
         </div>
       </div>

@@ -7,6 +7,28 @@ export type Json =
   | Json[];
 
 export type UserType = 'student' | 'staff';
+export type AchievementCategory = 'academic' | 'sports' | 'arts' | 'leadership' | 'other';
+
+export type Session =
+  | {
+      type: 'admin';
+    }
+  | {
+      type: 'staff';
+      id: string;
+      name: string;
+      email: string;
+      accessClasses: boolean;
+      accessResults: boolean;
+    }
+  | {
+      type: 'student';
+      id: string;
+      name: string;
+      email: string;
+      classId: string | null;
+      className?: string;
+    };
 
 export interface ClassItem {
   id: string;
@@ -51,6 +73,21 @@ export interface ResultItem {
       name: string;
       section: string | null;
     } | null;
+  } | null;
+}
+
+export interface AchievementItem {
+  id: string;
+  student_id: string;
+  title: string;
+  description: string | null;
+  category: AchievementCategory;
+  date: string | null;
+  created_at: string;
+  users?: {
+    id: string;
+    name: string;
+    email: string;
   } | null;
 }
 
@@ -153,6 +190,44 @@ export interface Database {
         Relationships: [
           {
             foreignKeyName: "results_student_id_fkey";
+            columns: ["student_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      achievements: {
+        Row: {
+          id: string;
+          student_id: string;
+          title: string;
+          description: string | null;
+          category: AchievementCategory;
+          date: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          student_id: string;
+          title: string;
+          description?: string | null;
+          category?: AchievementCategory;
+          date?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          student_id?: string;
+          title?: string;
+          description?: string | null;
+          category?: AchievementCategory;
+          date?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "achievements_student_id_fkey";
             columns: ["student_id"];
             isOneToOne: false;
             referencedRelation: "users";
