@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import type { PrizeType } from '@/types/database';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -16,12 +17,33 @@ export function calculateGrade(score: number | null | undefined): string {
 }
 
 /**
+ * Returns the badge classes for program prizes.
+ */
+export function getPrizeBadgeClass(prize: PrizeType | string): string {
+  switch (prize) {
+    case '1st Prize':
+      return 'bg-[#EEB540] text-amber-950 border border-amber-500/30 font-bold shadow-sm';
+    case '2nd Prize':
+      return 'bg-gray-200 text-gray-800 border border-gray-300 font-semibold';
+    case '3rd Prize':
+      return 'bg-amber-800 text-amber-50 border border-amber-900 font-semibold';
+    case 'Participation':
+      return 'bg-gray-100 text-gray-700 border border-gray-200';
+    case 'Special Mention':
+      return 'bg-sky-100 text-sky-800 border border-sky-200 font-medium';
+    case 'Best Performance':
+      return 'bg-[#A22538] text-white border border-[#851b2c] font-bold shadow-sm';
+    default:
+      return 'bg-gray-100 text-gray-700 border border-gray-200';
+  }
+}
+
+/**
  * Generates an auto-generated Kinford email based on the user's full name.
  * Format: {firstnamelastname}kinford@gmail.com (lowercase, no spaces, no special characters).
  * If duplicate exists in DB, appends a number: sabitrahman2kinford@gmail.com, etc.
  */
 export function generateUserEmail(name: string, existingEmails: string[] = []): string {
-  // Strip special characters, lowercase, remove spaces
   const cleanName = name
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
@@ -34,7 +56,6 @@ export function generateUserEmail(name: string, existingEmails: string[] = []): 
     return primaryCandidate;
   }
 
-  // Find next available numeric suffix (2, 3, 4...)
   let counter = 2;
   while (true) {
     const candidate = `${basePrefix}${counter}kinford@gmail.com`;
@@ -52,10 +73,9 @@ export function generateUserEmail(name: string, existingEmails: string[] = []): 
 export function generateRandomPassword(length = 8): string {
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const lower = 'abcdefghijkmnopqrstuvwxyz';
-  const numbers = '23456789'; // exclude 0 and 1 to prevent ambiguity if desired
+  const numbers = '23456789';
   const allChars = upper + lower + numbers;
 
-  // Guarantee at least 1 uppercase, 1 lowercase, 1 digit
   const passwordChars = [
     upper[Math.floor(Math.random() * upper.length)],
     lower[Math.floor(Math.random() * lower.length)],
@@ -66,7 +86,6 @@ export function generateRandomPassword(length = 8): string {
     passwordChars.push(allChars[Math.floor(Math.random() * allChars.length)]);
   }
 
-  // Fisher-Yates shuffle
   for (let i = passwordChars.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [passwordChars[i], passwordChars[j]] = [passwordChars[j], passwordChars[i]];

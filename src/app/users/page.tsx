@@ -16,7 +16,8 @@ import {
   Copy,
   CheckCircle2,
   KeyRound,
-  Shield,
+  Eye,
+  EyeOff,
   GraduationCap,
   Briefcase,
 } from 'lucide-react';
@@ -38,6 +39,9 @@ export default function UsersPage() {
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'student' | 'staff'>('all');
+
+  // Password visibility tracking per user row
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -79,7 +83,36 @@ export default function UsersPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch users with class information
+  // Toggle password visibility for a row
+  const togglePasswordVisibility = (userId: string) => {
+    setVisiblePasswords((prev) => ({
+      ...prev,
+      [userId]: !prev[userId],
+    }));
+  };
+
+  // Copy helpers
+  const copyEmail = (email: string) => {
+    navigator.clipboard.writeText(email);
+    toast.success('Email copied!');
+  };
+
+  const copyPassword = (password: string | null | undefined) => {
+    if (!password) {
+      toast.error('No password available to copy');
+      return;
+    }
+    navigator.clipboard.writeText(password);
+    toast.success('Password copied!');
+  };
+
+  const copyAllCredentials = (email: string, password: string | null | undefined) => {
+    const text = `Email: ${email}\nPassword: ${password || 'N/A'}`;
+    navigator.clipboard.writeText(text);
+    toast.success('Credentials copied!');
+  };
+
+  // Fetch users with class information and plain_password
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -90,6 +123,7 @@ export default function UsersPage() {
           name,
           email,
           password_hash,
+          plain_password,
           user_type,
           class_id,
           access_classes,
@@ -136,11 +170,9 @@ export default function UsersPage() {
   // Filtered users list
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      // Type filter
       if (typeFilter !== 'all' && u.user_type !== typeFilter) {
         return false;
       }
-      // Search query (name or email)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName = u.name.toLowerCase().includes(q);
@@ -184,7 +216,7 @@ export default function UsersPage() {
     setIsDeleteModalOpen(true);
   };
 
-  // Submit Add User (Student or Staff)
+  // Submit Add User
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addForm.name.trim()) {
@@ -199,20 +231,21 @@ export default function UsersPage() {
 
     setIsSubmitting(true);
     try {
-      // 1. Fetch existing emails to guarantee unique auto-generated email
+      // 1. Fetch existing emails
       const { data: existingData } = await supabase.from('users').select('email');
       const existingEmails = (existingData || []).map((u) => u.email);
 
-      // 2. Auto-generate email and random 8-char password
+      // 2. Auto-generate email and plain password
       const generatedEmail = generateUserEmail(addForm.name.trim(), existingEmails);
       const plainPassword = generateRandomPassword(8);
       const passwordHash = bcrypt.hashSync(plainPassword, 10);
 
-      // 3. Insert into Supabase users table
+      // 3. Save both password_hash and plain_password to Supabase
       const { error } = await supabase.from('users').insert({
         name: addForm.name.trim(),
         email: generatedEmail,
         password_hash: passwordHash,
+        plain_password: plainPassword,
         user_type: addForm.user_type,
         class_id: addForm.user_type === 'student' ? addForm.class_id : null,
         access_classes: addForm.user_type === 'staff' ? addForm.access_classes : false,
@@ -221,11 +254,10 @@ export default function UsersPage() {
 
       if (error) throw error;
 
-      // Close add modal and refresh list
       setIsAddModalOpen(false);
       fetchUsers();
 
-      // Show credentials popup with one-time plain password
+      // Show credentials popup
       setCredentialsData({
         title: 'User Created Successfully',
         name: addForm.name.trim(),
@@ -285,9 +317,13 @@ export default function UsersPage() {
       const newPlainPassword = generateRandomPassword(8);
       const newPasswordHash = bcrypt.hashSync(newPlainPassword, 10);
 
+      // Update both password_hash and plain_password
       const { error } = await supabase
         .from('users')
-        .update({ password_hash: newPasswordHash })
+        .update({
+          password_hash: newPasswordHash,
+          plain_password: newPlainPassword,
+        })
         .eq('id', selectedUser.id);
 
       if (error) throw error;
@@ -295,7 +331,6 @@ export default function UsersPage() {
       setIsEditModalOpen(false);
       fetchUsers();
 
-      // Show credentials popup with newly reset password
       setCredentialsData({
         title: 'Password Reset Successfully',
         name: selectedUser.name,
@@ -336,15 +371,7 @@ export default function UsersPage() {
     }
   };
 
-  // Copy Credentials to Clipboard
-  const handleCopyCredentials = () => {
-    if (!credentialsData) return;
-    const textToCopy = `Email: ${credentialsData.email}\nPassword: ${credentialsData.plainPassword}`;
-    navigator.clipboard.writeText(textToCopy);
-    toast.success('Copied!');
-  };
-
-  // Table Columns definition: Name | Type | Email | Class | Actions
+  // Table Columns: NAME | TYPE | EMAIL | PASSWORD | CLASS | ACTIONS
   const columns: Column<UserItem>[] = [
     {
       header: 'Name',
@@ -407,10 +434,61 @@ export default function UsersPage() {
     {
       header: 'Email',
       render: (u) => (
-        <span className="font-mono text-xs text-gray-600 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
-          {u.email}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-xs text-gray-700 bg-gray-50 px-2 py-1 rounded-md border border-gray-200">
+            {u.email}
+          </span>
+          <button
+            onClick={() => copyEmail(u.email)}
+            className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+            title="Copy email"
+            aria-label="Copy email"
+          >
+            <Copy className="w-3.5 h-3.5" />
+          </button>
+        </div>
       ),
+    },
+    {
+      header: 'Password',
+      render: (u) => {
+        const isRevealed = !!visiblePasswords[u.id];
+        const displayPassword = u.plain_password || '••••••••';
+
+        return (
+          <div className="flex items-center gap-1.5 font-mono text-xs">
+            <span
+              className={`px-2 py-1 rounded-md border text-xs tracking-wider transition-all select-all ${
+                isRevealed
+                  ? 'bg-[#FFF1F3] text-[#A22538] border-[#A22538]/20 font-bold'
+                  : 'bg-gray-50 text-gray-500 border-gray-200'
+              }`}
+            >
+              {isRevealed ? displayPassword : '••••••••'}
+            </span>
+            <button
+              onClick={() => togglePasswordVisibility(u.id)}
+              className="p-1 text-gray-400 hover:text-[#A22538] hover:bg-rose-50 rounded transition-colors"
+              title={isRevealed ? 'Mask password' : 'Show password'}
+              aria-label={isRevealed ? 'Mask password' : 'Show password'}
+            >
+              {isRevealed ? (
+                <EyeOff className="w-3.5 h-3.5" />
+              ) : (
+                <Eye className="w-3.5 h-3.5" />
+              )}
+            </button>
+            <button
+              onClick={() => copyPassword(u.plain_password)}
+              className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              title="Copy password"
+              aria-label="Copy password"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        );
+      },
     },
     {
       header: 'Class',
@@ -434,9 +512,18 @@ export default function UsersPage() {
       className: 'text-right',
       render: (u) => (
         <div className="flex items-center justify-end gap-1">
+          {/* Key icon to copy both credentials */}
+          <button
+            onClick={() => copyAllCredentials(u.email, u.plain_password)}
+            className="p-1.5 text-gray-400 hover:text-[#EEB540] hover:bg-[#FEF7E8] rounded-lg transition-colors"
+            title="Copy email & password"
+            aria-label="Copy email and password"
+          >
+            <KeyRound className="w-4 h-4" />
+          </button>
           <button
             onClick={() => handleOpenEdit(u)}
-            className="p-1.5 text-gray-500 hover:text-[#A22538] hover:bg-rose-50 rounded-lg transition-colors"
+            className="p-1.5 text-gray-400 hover:text-[#A22538] hover:bg-rose-50 rounded-lg transition-colors"
             title="Edit user"
             aria-label="Edit user"
           >
@@ -444,7 +531,7 @@ export default function UsersPage() {
           </button>
           <button
             onClick={() => handleOpenDelete(u)}
-            className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="Delete user"
             aria-label="Delete user"
           >
@@ -529,7 +616,6 @@ export default function UsersPage() {
         description="Select user type and fill details. Credentials will be auto-generated."
       >
         <form onSubmit={handleAddSubmit} className="space-y-4">
-          {/* User Type Dropdown */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
               User Type *
@@ -549,7 +635,6 @@ export default function UsersPage() {
             </select>
           </div>
 
-          {/* Full Name */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
               Full Name *
@@ -567,7 +652,6 @@ export default function UsersPage() {
             />
           </div>
 
-          {/* Conditional Fields: Student -> Class Dropdown */}
           {addForm.user_type === 'student' ? (
             <div>
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
@@ -588,7 +672,6 @@ export default function UsersPage() {
               </select>
             </div>
           ) : (
-            /* Conditional Fields: Staff -> Access Permissions Checkboxes */
             <div className="space-y-2.5 p-3.5 bg-gray-50 border border-gray-200 rounded-lg">
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
                 Access Permissions
@@ -620,11 +703,10 @@ export default function UsersPage() {
             </div>
           )}
 
-          {/* Info pill about auto-generation */}
           <div className="p-3 bg-[#FFF1F3] rounded-lg border border-[#A22538]/10 text-xs text-[#A22538]">
             <p className="font-semibold">Auto-Generated Credentials</p>
             <p className="text-[11px] text-[#A22538]/80 mt-0.5">
-              Email ({'{name}'}kinford@gmail.com) and a secure 8-character password will be generated upon save.
+              Email ({'{name}'}kinford@gmail.com) and an 8-character password will be generated upon save.
             </p>
           </div>
 
@@ -655,7 +737,6 @@ export default function UsersPage() {
         description="Update user information and access rights."
       >
         <form onSubmit={handleEditSubmit} className="space-y-4">
-          {/* User Type (Read-only) */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
               User Type
@@ -666,7 +747,6 @@ export default function UsersPage() {
             </div>
           </div>
 
-          {/* Email (Read-only) */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
               Email Address
@@ -679,7 +759,6 @@ export default function UsersPage() {
             />
           </div>
 
-          {/* Full Name */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
               Full Name *
@@ -693,7 +772,6 @@ export default function UsersPage() {
             />
           </div>
 
-          {/* Student Class */}
           {selectedUser?.user_type === 'student' && (
             <div>
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
@@ -714,7 +792,6 @@ export default function UsersPage() {
             </div>
           )}
 
-          {/* Staff Permissions */}
           {selectedUser?.user_type === 'staff' && (
             <div className="space-y-2.5 p-3.5 bg-gray-50 border border-gray-200 rounded-lg">
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
@@ -747,7 +824,6 @@ export default function UsersPage() {
             </div>
           )}
 
-          {/* Reset Password Button */}
           <div className="pt-2">
             <button
               type="button"
@@ -788,7 +864,6 @@ export default function UsersPage() {
       >
         {credentialsData && (
           <div className="space-y-5">
-            {/* Success header with checkmark */}
             <div className="flex items-center gap-3 p-3 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200">
               <CheckCircle2 className="w-6 h-6 text-emerald-600 flex-shrink-0" />
               <div>
@@ -799,7 +874,6 @@ export default function UsersPage() {
               </div>
             </div>
 
-            {/* User details */}
             <div className="space-y-2 text-sm bg-gray-50 p-4 rounded-xl border border-gray-200">
               <div className="flex justify-between">
                 <span className="text-gray-500 text-xs uppercase font-semibold">Name</span>
@@ -825,7 +899,6 @@ export default function UsersPage() {
               </div>
             </div>
 
-            {/* Warning banner */}
             <div className="flex items-start gap-2.5 p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900">
               <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
               <p>
@@ -833,11 +906,12 @@ export default function UsersPage() {
               </p>
             </div>
 
-            {/* Actions: Copy Credentials & Done */}
             <div className="space-y-2 pt-2">
               <button
                 type="button"
-                onClick={handleCopyCredentials}
+                onClick={() => {
+                  copyAllCredentials(credentialsData.email, credentialsData.plainPassword);
+                }}
                 className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold text-white bg-[#A22538] hover:bg-[#851b2c] transition-colors flex items-center justify-center gap-2 shadow-sm"
               >
                 <Copy className="w-4 h-4" />
@@ -866,7 +940,7 @@ export default function UsersPage() {
           <div className="flex items-center gap-3 p-3 bg-red-50 text-red-800 rounded-lg border border-red-200">
             <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-600" />
             <p className="text-xs leading-relaxed">
-              This will permanently delete this user account and any associated exam results.
+              This will permanently delete this user account and any associated prizes and achievements.
             </p>
           </div>
 

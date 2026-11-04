@@ -92,7 +92,7 @@ export default function DashboardPage() {
           label="Results Published"
           value={stats.resultsPublished}
           icon={ClipboardList}
-          subtext="Exam and term scores"
+          subtext="Program prizes awarded"
           isLoading={isLoading}
         />
         <StatCard
@@ -154,7 +154,7 @@ export default function DashboardPage() {
               <h3 className="text-sm font-semibold text-gray-900 group-hover:text-[#A22538] transition-colors">
                 Publish Results
               </h3>
-              <p className="text-xs text-gray-500">Record scores and grades</p>
+              <p className="text-xs text-gray-500">Award competition & program prizes</p>
             </div>
           </div>
           <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-[#A22538] group-hover:translate-x-1 transition-all" />

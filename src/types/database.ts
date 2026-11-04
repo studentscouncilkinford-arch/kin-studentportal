@@ -8,6 +8,13 @@ export type Json =
 
 export type UserType = 'student' | 'staff';
 export type AchievementCategory = 'academic' | 'sports' | 'arts' | 'leadership' | 'other';
+export type PrizeType =
+  | '1st Prize'
+  | '2nd Prize'
+  | '3rd Prize'
+  | 'Participation'
+  | 'Special Mention'
+  | 'Best Performance';
 
 export type Session =
   | {
@@ -43,6 +50,7 @@ export interface UserItem {
   name: string;
   email: string;
   password_hash: string;
+  plain_password?: string | null;
   user_type: UserType;
   class_id: string | null;
   access_classes: boolean;
@@ -58,9 +66,8 @@ export interface UserItem {
 export interface ResultItem {
   id: string;
   student_id: string;
-  subject: string;
-  score: number | null;
-  grade: string | null;
+  program_name: string;
+  prize: PrizeType;
   date: string | null;
   created_at: string;
   students?: {
@@ -121,6 +128,7 @@ export interface Database {
           name: string;
           email: string;
           password_hash: string;
+          plain_password?: string | null;
           user_type: UserType;
           class_id: string | null;
           access_classes: boolean;
@@ -132,6 +140,7 @@ export interface Database {
           name: string;
           email: string;
           password_hash: string;
+          plain_password?: string | null;
           user_type: UserType;
           class_id?: string | null;
           access_classes?: boolean;
@@ -143,6 +152,7 @@ export interface Database {
           name?: string;
           email?: string;
           password_hash?: string;
+          plain_password?: string | null;
           user_type?: UserType;
           class_id?: string | null;
           access_classes?: boolean;
@@ -163,27 +173,24 @@ export interface Database {
         Row: {
           id: string;
           student_id: string;
-          subject: string;
-          score: number | null;
-          grade: string | null;
+          program_name: string;
+          prize: PrizeType;
           date: string | null;
           created_at: string;
         };
         Insert: {
           id?: string;
           student_id: string;
-          subject: string;
-          score?: number | null;
-          grade?: string | null;
+          program_name: string;
+          prize: PrizeType;
           date?: string | null;
           created_at?: string;
         };
         Update: {
           id?: string;
           student_id?: string;
-          subject?: string;
-          score?: number | null;
-          grade?: string | null;
+          program_name?: string;
+          prize?: PrizeType;
           date?: string | null;
           created_at?: string;
         };

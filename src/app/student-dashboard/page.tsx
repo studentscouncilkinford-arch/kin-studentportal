@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { ResultItem, AchievementItem, AchievementCategory } from '@/types/database';
 import StatCard from '@/components/StatCard';
 import Modal from '@/components/Modal';
+import { getPrizeBadgeClass } from '@/lib/utils';
 import {
   ClipboardList,
   Trophy,
@@ -14,27 +15,10 @@ import {
   Plus,
   Calendar,
   Sparkles,
-  BookOpen,
   Award,
-  BarChart3,
-  TrendingUp,
+  PartyPopper,
 } from 'lucide-react';
 import { toast } from 'sonner';
-
-interface ClassAggregatedOverview {
-  className: string;
-  subject: string;
-  avgScore: number;
-  maxScore: number;
-  count: number;
-}
-
-interface LeaderboardEntry {
-  rank: number;
-  studentId: string;
-  name: string;
-  avgScore: number;
-}
 
 export default function StudentDashboardPage() {
   const { session } = useAuth();
@@ -47,10 +31,9 @@ export default function StudentDashboardPage() {
   const [myResults, setMyResults] = useState<ResultItem[]>([]);
   const [myAchievements, setMyAchievements] = useState<AchievementItem[]>([]);
 
-  // Overall data
-  const [overallOverview, setOverallOverview] = useState<ClassAggregatedOverview[]>([]);
+  // Overall data (School-wide program results and achievements)
+  const [allProgramResults, setAllProgramResults] = useState<ResultItem[]>([]);
   const [topAchievements, setTopAchievements] = useState<AchievementItem[]>([]);
-  const [classLeaderboard, setClassLeaderboard] = useState<LeaderboardEntry[]>([]);
 
   // Add Achievement Modal
   const [isAddAchievementOpen, setIsAddAchievementOpen] = useState(false);
@@ -68,7 +51,7 @@ export default function StudentDashboardPage() {
     setIsLoading(true);
 
     try {
-      // 1. Fetch student's own results
+      // 1. Fetch student's own program results
       const { data: resultsData, error: resultsError } = await supabase
         .from('results')
         .select('*')
@@ -88,17 +71,20 @@ export default function StudentDashboardPage() {
       if (achievementsError) throw achievementsError;
       setMyAchievements((achievementsData as unknown as AchievementItem[]) || []);
 
-      // 3. Fetch Overall Data: All results with class & student info for aggregated views
-      const { data: allResultsData } = await supabase
+      // 3. Fetch Overall Program Results across all students
+      const { data: allResultsData, error: allResultsError } = await supabase
         .from('results')
         .select(`
           id,
-          subject,
-          score,
           student_id,
+          program_name,
+          prize,
+          date,
+          created_at,
           students:users (
             id,
             name,
+            email,
             class_id,
             classes (
               id,
@@ -106,83 +92,12 @@ export default function StudentDashboardPage() {
               section
             )
           )
-        `);
+        `)
+        .order('date', { ascending: false })
+        .limit(20);
 
-      if (allResultsData) {
-        // Group by class and subject
-        const classSubjectMap = new Map<string, { total: number; count: number; max: number; className: string; subject: string }>();
-        const studentScoresMap = new Map<string, { total: number; count: number; name: string; classId: string | null }>();
-
-        allResultsData.forEach((r: any) => {
-          if (r.score !== null && r.score !== undefined) {
-            const cls = r.students?.classes;
-            const clsName = cls ? `${cls.name}${cls.section ? ` - ${cls.section}` : ''}` : 'General';
-            const key = `${clsName}:::${r.subject}`;
-
-            const current = classSubjectMap.get(key) || {
-              total: 0,
-              count: 0,
-              max: -Infinity,
-              className: clsName,
-              subject: r.subject,
-            };
-
-            current.total += Number(r.score);
-            current.count += 1;
-            current.max = Math.max(current.max, Number(r.score));
-            classSubjectMap.set(key, current);
-
-            // Student leaderboard tracking
-            if (r.students?.id) {
-              const stId = r.students.id;
-              const stEntry = studentScoresMap.get(stId) || {
-                total: 0,
-                count: 0,
-                name: r.students.name,
-                classId: r.students.class_id,
-              };
-              stEntry.total += Number(r.score);
-              stEntry.count += 1;
-              studentScoresMap.set(stId, stEntry);
-            }
-          }
-        });
-
-        // Convert class aggregations to array
-        const aggregated: ClassAggregatedOverview[] = [];
-        classSubjectMap.forEach((val) => {
-          aggregated.push({
-            className: val.className,
-            subject: val.subject,
-            avgScore: Math.round((val.total / val.count) * 10) / 10,
-            maxScore: val.max,
-            count: val.count,
-          });
-        });
-        setOverallOverview(aggregated.sort((a, b) => a.className.localeCompare(b.className)));
-
-        // Filter leaderboard for the student's own class
-        if (student.classId) {
-          const classStudents: LeaderboardEntry[] = [];
-          studentScoresMap.forEach((val, id) => {
-            if (val.classId === student.classId && val.count > 0) {
-              classStudents.push({
-                rank: 0,
-                studentId: id,
-                name: val.name,
-                avgScore: Math.round((val.total / val.count) * 10) / 10,
-              });
-            }
-          });
-
-          classStudents.sort((a, b) => b.avgScore - a.avgScore);
-          const ranked = classStudents.slice(0, 5).map((entry, idx) => ({
-            ...entry,
-            rank: idx + 1,
-          }));
-          setClassLeaderboard(ranked);
-        }
-      }
+      if (allResultsError) throw allResultsError;
+      setAllProgramResults((allResultsData as unknown as ResultItem[]) || []);
 
       // 4. Fetch Top Achievements school-wide
       const { data: allAchievementsData } = await supabase
@@ -316,7 +231,7 @@ export default function StudentDashboardPage() {
               label="My Results"
               value={myResults.length}
               icon={ClipboardList}
-              subtext="Published term scores"
+              subtext="Program & event prizes awarded"
               isLoading={isLoading}
             />
             <StatCard
@@ -348,7 +263,7 @@ export default function StudentDashboardPage() {
               {isLoading ? (
                 <div className="space-y-3 py-4">
                   {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="h-10 bg-gray-100 animate-pulse rounded-lg" />
+                    <div key={i} className="h-12 bg-gray-100 animate-pulse rounded-lg" />
                   ))}
                 </div>
               ) : myResults.length === 0 ? (
@@ -357,35 +272,27 @@ export default function StudentDashboardPage() {
                   <p>No results published yet.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      <tr>
-                        <th className="px-4 py-3">Subject</th>
-                        <th className="px-4 py-3">Score</th>
-                        <th className="px-4 py-3">Grade</th>
-                        <th className="px-4 py-3">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {myResults.slice(0, 5).map((r) => (
-                        <tr key={r.id} className="hover:bg-gray-50/70 transition-colors">
-                          <td className="px-4 py-3 font-semibold text-gray-900">{r.subject}</td>
-                          <td className="px-4 py-3 font-mono font-medium text-gray-700">
-                            {r.score !== null ? `${r.score}%` : 'N/A'}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-[#FEF7E8] text-[#B8860B] border border-[#EEB540]/30">
-                              {r.grade || '-'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-xs text-gray-500">
-                            {r.date || new Date(r.created_at).toLocaleDateString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="divide-y divide-gray-100">
+                  {myResults.slice(0, 5).map((r) => (
+                    <div
+                      key={r.id}
+                      className="py-3 px-2 flex items-center justify-between hover:bg-gray-50/70 rounded-lg transition-colors"
+                    >
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-900">{r.program_name}</h4>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {r.date || new Date(r.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs ${getPrizeBadgeClass(
+                          r.prize
+                        )}`}
+                      >
+                        🏆 {r.prize}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -470,40 +377,53 @@ export default function StudentDashboardPage() {
       {/* ================= OVERALL TAB ================= */}
       {activeTab === 'overall' && (
         <div className="space-y-8 animate-in fade-in">
-          {/* Class Results Overview */}
+          {/* Recent Program Results Across All Students */}
           <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 pb-4 border-b border-gray-100">
-              <BarChart3 className="w-4 h-4 text-[#A22538]" />
+              <PartyPopper className="w-5 h-5 text-[#A22538]" />
               <div>
-                <h2 className="text-base font-bold text-gray-900">Class Results Overview</h2>
-                <p className="text-xs text-gray-500">Average and top scores across academic classes</p>
+                <h2 className="text-base font-bold text-gray-900">Recent Program Results</h2>
+                <p className="text-xs text-gray-500">Prizes and recognitions awarded across all students</p>
               </div>
             </div>
 
             <div className="mt-4">
-              {overallOverview.length === 0 ? (
-                <p className="text-sm text-gray-400 py-6 text-center">No aggregated scores available.</p>
+              {allProgramResults.length === 0 ? (
+                <p className="text-sm text-gray-400 py-6 text-center">No program results recorded yet.</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       <tr>
-                        <th className="px-4 py-3">Class</th>
-                        <th className="px-4 py-3">Subject</th>
-                        <th className="px-4 py-3">Average Score</th>
-                        <th className="px-4 py-3">Highest Score</th>
+                        <th className="px-4 py-3">Student Name</th>
+                        <th className="px-4 py-3">Program / Event</th>
+                        <th className="px-4 py-3">Prize</th>
+                        <th className="px-4 py-3">Date</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {overallOverview.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50/70 transition-colors">
-                          <td className="px-4 py-3 font-semibold text-gray-900">{item.className}</td>
-                          <td className="px-4 py-3 text-gray-700 font-medium">{item.subject}</td>
-                          <td className="px-4 py-3 font-mono font-bold text-gray-900">{item.avgScore}%</td>
+                      {allProgramResults.map((item) => (
+                        <tr key={item.id} className="hover:bg-gray-50/70 transition-colors">
+                          <td className="px-4 py-3 font-semibold text-gray-900">
+                            {item.students?.name || 'Student'}
+                            {item.students?.classes?.name && (
+                              <span className="ml-2 text-[11px] font-normal text-gray-400">
+                                ({item.students.classes.name})
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-gray-800 font-medium">{item.program_name}</td>
                           <td className="px-4 py-3">
-                            <span className="font-mono font-bold text-[#A22538] bg-[#FFF1F3] px-2 py-0.5 rounded border border-[#A22538]/20 text-xs">
-                              {item.maxScore}%
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs ${getPrizeBadgeClass(
+                                item.prize
+                              )}`}
+                            >
+                              🏆 {item.prize}
                             </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-500">
+                            {item.date || new Date(item.created_at).toLocaleDateString()}
                           </td>
                         </tr>
                       ))}
@@ -514,73 +434,13 @@ export default function StudentDashboardPage() {
             </div>
           </div>
 
-          {/* Class Leaderboard */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <div className="flex items-center gap-2 pb-4 border-b border-gray-100">
-              <TrendingUp className="w-4 h-4 text-[#EEB540]" />
-              <div>
-                <h2 className="text-base font-bold text-gray-900">Class Leaderboard</h2>
-                <p className="text-xs text-gray-500">Top students by average score in your class</p>
-              </div>
-            </div>
-
-            <div className="mt-4">
-              {classLeaderboard.length === 0 ? (
-                <p className="text-sm text-gray-400 py-6 text-center">
-                  Not enough results to show rankings.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      <tr>
-                        <th className="px-4 py-3 w-16">Rank</th>
-                        <th className="px-4 py-3">Name</th>
-                        <th className="px-4 py-3">Average Score</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {classLeaderboard.map((entry) => {
-                        const isTop = entry.rank === 1;
-                        return (
-                          <tr key={entry.studentId} className="hover:bg-gray-50/70 transition-colors">
-                            <td className="px-4 py-3">
-                              <span
-                                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                                  isTop
-                                    ? 'bg-[#FEF7E8] text-[#B8860B] border border-[#EEB540]'
-                                    : 'bg-gray-100 text-gray-700'
-                                }`}
-                              >
-                                #{entry.rank}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 font-semibold text-gray-900 flex items-center gap-2">
-                              <span>{entry.name}</span>
-                              {entry.studentId === student?.id && (
-                                <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 rounded font-bold">
-                                  You
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 font-mono font-bold text-[#A22538]">{entry.avgScore}%</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Top Achievements School-wide */}
           <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 pb-4 border-b border-gray-100">
-              <Sparkles className="w-4 h-4 text-purple-600" />
+              <Sparkles className="w-5 h-5 text-purple-600" />
               <div>
                 <h2 className="text-base font-bold text-gray-900">Top Achievements</h2>
-                <p className="text-xs text-gray-500">Recent student achievements across Kinford</p>
+                <p className="text-xs text-gray-500">Recent accomplishments from students across Kinford</p>
               </div>
             </div>
 

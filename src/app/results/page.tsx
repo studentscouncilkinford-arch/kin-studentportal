@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { ResultItem, UserItem, ClassItem } from '@/types/database';
+import type { ResultItem, UserItem, ClassItem, PrizeType } from '@/types/database';
 import DataTable, { Column } from '@/components/DataTable';
 import Modal from '@/components/Modal';
-import { calculateGrade } from '@/lib/utils';
+import { getPrizeBadgeClass } from '@/lib/utils';
 import {
-  ClipboardList,
+  Trophy,
   Plus,
   Search,
   Pencil,
@@ -15,9 +15,19 @@ import {
   AlertTriangle,
   Upload,
   Calendar,
+  Sparkles,
   Award,
 } from 'lucide-react';
 import { toast } from 'sonner';
+
+const PRIZE_OPTIONS: PrizeType[] = [
+  '1st Prize',
+  '2nd Prize',
+  '3rd Prize',
+  'Participation',
+  'Special Mention',
+  'Best Performance',
+];
 
 export default function ResultsPage() {
   const [results, setResults] = useState<ResultItem[]>([]);
@@ -27,8 +37,8 @@ export default function ResultsPage() {
 
   // Filters
   const [selectedClassFilter, setSelectedClassFilter] = useState('');
-  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState('');
-  const [searchStudentQuery, setSearchStudentQuery] = useState('');
+  const [selectedPrizeFilter, setSelectedPrizeFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -38,17 +48,20 @@ export default function ResultsPage() {
 
   // Form states
   const today = new Date().toISOString().split('T')[0];
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    student_id: string;
+    program_name: string;
+    prize: PrizeType;
+    date: string;
+  }>({
     student_id: '',
-    subject: '',
-    score: '' as string | number,
-    grade: '',
+    program_name: '',
+    prize: '1st Prize',
     date: today,
   });
-  const [isGradeManual, setIsGradeManual] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch results with students (users) & classes join
+  // Fetch results with students & classes join
   const fetchResults = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -57,9 +70,8 @@ export default function ResultsPage() {
         .select(`
           id,
           student_id,
-          subject,
-          score,
-          grade,
+          program_name,
+          prize,
           date,
           created_at,
           students:users (
@@ -135,15 +147,6 @@ export default function ResultsPage() {
     fetchClasses();
   }, [fetchResults, fetchStudents, fetchClasses]);
 
-  // Extract unique subjects for the filter dropdown
-  const uniqueSubjects = useMemo(() => {
-    const set = new Set<string>();
-    results.forEach((r) => {
-      if (r.subject) set.add(r.subject);
-    });
-    return Array.from(set).sort();
-  }, [results]);
-
   // Filtered results
   const filteredResults = useMemo(() => {
     return results.filter((res) => {
@@ -152,49 +155,29 @@ export default function ResultsPage() {
         const studentClassId = res.students?.class_id;
         if (studentClassId !== selectedClassFilter) return false;
       }
-      // Subject filter
-      if (selectedSubjectFilter) {
-        if (res.subject.toLowerCase() !== selectedSubjectFilter.toLowerCase()) {
-          return false;
-        }
+      // Prize filter
+      if (selectedPrizeFilter) {
+        if (res.prize !== selectedPrizeFilter) return false;
       }
-      // Search query (student name or roll number)
-      if (searchStudentQuery.trim()) {
-        const q = searchStudentQuery.toLowerCase();
+      // Search query (student name or program name)
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
         const studentName = res.students?.name?.toLowerCase() || '';
-        const email = res.students?.email?.toLowerCase() || '';
-        const subject = res.subject.toLowerCase();
-        if (!studentName.includes(q) && !email.includes(q) && !subject.includes(q)) {
+        const programName = res.program_name?.toLowerCase() || '';
+        if (!studentName.includes(q) && !programName.includes(q)) {
           return false;
         }
       }
       return true;
     });
-  }, [results, selectedClassFilter, selectedSubjectFilter, searchStudentQuery]);
-
-  // Score change handler to auto-calculate grade
-  const handleScoreChange = (val: string) => {
-    const num = val === '' ? '' : parseFloat(val);
-    const updated = {
-      ...formData,
-      score: val,
-      grade: isGradeManual
-        ? formData.grade
-        : typeof num === 'number' && !isNaN(num)
-        ? calculateGrade(num)
-        : '',
-    };
-    setFormData(updated);
-  };
+  }, [results, selectedClassFilter, selectedPrizeFilter, searchQuery]);
 
   // Open Add Modal
   const handleOpenAdd = () => {
-    setIsGradeManual(false);
     setFormData({
       student_id: students.length > 0 ? students[0].id : '',
-      subject: '',
-      score: '',
-      grade: '',
+      program_name: '',
+      prize: '1st Prize',
       date: today,
     });
     setIsAddModalOpen(true);
@@ -203,12 +186,10 @@ export default function ResultsPage() {
   // Open Edit Modal
   const handleOpenEdit = (result: ResultItem) => {
     setSelectedResult(result);
-    setIsGradeManual(true);
     setFormData({
       student_id: result.student_id,
-      subject: result.subject,
-      score: result.score !== null ? result.score : '',
-      grade: result.grade || '',
+      program_name: result.program_name,
+      prize: result.prize,
       date: result.date || today,
     });
     setIsEditModalOpen(true);
@@ -227,26 +208,22 @@ export default function ResultsPage() {
       toast.error('Please select a student');
       return;
     }
-    if (!formData.subject.trim()) {
-      toast.error('Subject is required');
+    if (!formData.program_name.trim()) {
+      toast.error('Program or event name is required');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const parsedScore =
-        formData.score === '' ? null : parseFloat(String(formData.score));
-
       const { error } = await supabase.from('results').insert({
         student_id: formData.student_id,
-        subject: formData.subject.trim(),
-        score: parsedScore,
-        grade: formData.grade.trim() || null,
+        program_name: formData.program_name.trim(),
+        prize: formData.prize,
         date: formData.date || today,
       });
 
       if (error) throw error;
-      toast.success('Result published successfully!');
+      toast.success('Program prize published successfully!');
       setIsAddModalOpen(false);
       fetchResults();
     } catch (err: unknown) {
@@ -261,23 +238,19 @@ export default function ResultsPage() {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedResult) return;
-    if (!formData.subject.trim()) {
-      toast.error('Subject is required');
+    if (!formData.program_name.trim()) {
+      toast.error('Program or event name is required');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const parsedScore =
-        formData.score === '' ? null : parseFloat(String(formData.score));
-
       const { error } = await supabase
         .from('results')
         .update({
           student_id: formData.student_id,
-          subject: formData.subject.trim(),
-          score: parsedScore,
-          grade: formData.grade.trim() || null,
+          program_name: formData.program_name.trim(),
+          prize: formData.prize,
           date: formData.date || today,
         })
         .eq('id', selectedResult.id);
@@ -317,7 +290,7 @@ export default function ResultsPage() {
     }
   };
 
-  // Columns definition
+  // Table Columns
   const columns: Column<ResultItem>[] = [
     {
       header: 'Student Name',
@@ -352,39 +325,22 @@ export default function ResultsPage() {
       },
     },
     {
-      header: 'Subject',
+      header: 'Program / Event',
       render: (res) => (
-        <span className="font-medium text-gray-900">{res.subject}</span>
+        <span className="font-semibold text-gray-900">{res.program_name}</span>
       ),
     },
     {
-      header: 'Score',
+      header: 'Prize',
       render: (res) => (
-        <span className="font-mono font-semibold text-gray-800">
-          {res.score !== null ? `${res.score}%` : 'N/A'}
+        <span
+          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs ${getPrizeBadgeClass(
+            res.prize
+          )}`}
+        >
+          {res.prize}
         </span>
       ),
-    },
-    {
-      header: 'Grade',
-      render: (res) => {
-        const grade = res.grade || '-';
-        const isHigh = grade === 'A+' || grade === 'A';
-        const isPass = grade === 'B' || grade === 'C' || grade === 'D';
-        return (
-          <span
-            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
-              isHigh
-                ? 'bg-[#FEF7E8] text-[#B8860B] border border-[#EEB540]/30'
-                : isPass
-                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                : 'bg-red-50 text-red-700 border border-red-200'
-            }`}
-          >
-            {grade}
-          </span>
-        );
-      },
     },
     {
       header: 'Date',
@@ -429,11 +385,10 @@ export default function ResultsPage() {
             Results
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Publish, edit, and review academic test scores and grades.
+            Publish and manage student prizes won in competitions and events.
           </p>
         </div>
         <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
-          {/* Disabled Bulk Upload button */}
           <button
             disabled
             className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-gray-400 bg-gray-100 border border-gray-200 cursor-not-allowed shadow-none"
@@ -448,7 +403,7 @@ export default function ResultsPage() {
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#A22538] hover:bg-[#851b2c] transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
-            <span>Add Result</span>
+            <span>Publish Result</span>
           </button>
         </div>
       </div>
@@ -462,9 +417,9 @@ export default function ResultsPage() {
           </div>
           <input
             type="text"
-            value={searchStudentQuery}
-            onChange={(e) => setSearchStudentQuery(e.target.value)}
-            placeholder="Search student, roll number, or subject..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by student or program name..."
             className="w-full pl-10 pr-4 py-2 bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#A22538] focus:ring-2 focus:ring-[#A22538]/15 transition-all"
           />
         </div>
@@ -485,17 +440,17 @@ export default function ResultsPage() {
           </select>
         </div>
 
-        {/* Filter by Subject */}
+        {/* Filter by Prize */}
         <div className="w-full md:w-48">
           <select
-            value={selectedSubjectFilter}
-            onChange={(e) => setSelectedSubjectFilter(e.target.value)}
+            value={selectedPrizeFilter}
+            onChange={(e) => setSelectedPrizeFilter(e.target.value)}
             className="w-full px-3 py-2 bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-[#A22538] focus:ring-2 focus:ring-[#A22538]/15 transition-all"
           >
-            <option value="">All Subjects</option>
-            {uniqueSubjects.map((sub) => (
-              <option key={sub} value={sub}>
-                {sub}
+            <option value="">All Prizes</option>
+            {PRIZE_OPTIONS.map((p) => (
+              <option key={p} value={p}>
+                {p}
               </option>
             ))}
           </select>
@@ -508,19 +463,19 @@ export default function ResultsPage() {
         data={filteredResults}
         isLoading={isLoading}
         emptyMessage={
-          selectedClassFilter || selectedSubjectFilter || searchStudentQuery
+          selectedClassFilter || selectedPrizeFilter || searchQuery
             ? 'No results match the selected filters.'
-            : 'No published results yet. Click "Add Result" to post a score.'
+            : 'No program prizes published yet. Click "Publish Result" to add one.'
         }
         keyExtractor={(item) => item.id}
       />
 
-      {/* Add Result Modal */}
+      {/* Add / Publish Result Modal */}
       <Modal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        title="Publish Result"
-        description="Record score and grade for a student."
+        title="Publish Program Result"
+        description="Record competition or event prizes won by students."
       >
         <form onSubmit={handleAddSubmit} className="space-y-4">
           <div>
@@ -538,7 +493,7 @@ export default function ResultsPage() {
               <option value="">Select a student...</option>
               {students.map((st) => (
                 <option key={st.id} value={st.id}>
-                  {st.name} ({st.email}) - {st.classes?.name || 'No Class'}
+                  {st.name} ({st.classes?.name || 'General'})
                 </option>
               ))}
             </select>
@@ -546,61 +501,39 @@ export default function ResultsPage() {
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-              Subject *
+              Program / Event Name *
             </label>
             <input
               type="text"
               required
-              value={formData.subject}
+              value={formData.program_name}
               onChange={(e) =>
-                setFormData({ ...formData, subject: e.target.value })
+                setFormData({ ...formData, program_name: e.target.value })
               }
-              placeholder="e.g. Mathematics, English Literature, Biology"
+              placeholder="e.g. Business Quiz, Fine Arts Day, Science Exhibition"
               className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#A22538] focus:ring-2 focus:ring-[#A22538]/15"
+              autoFocus
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                Score (%)
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                value={formData.score}
-                onChange={(e) => handleScoreChange(e.target.value)}
-                placeholder="e.g. 88.5"
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#A22538] focus:ring-2 focus:ring-[#A22538]/15"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Grade
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setIsGradeManual(!isGradeManual)}
-                  className="text-[10px] text-[#A22538] hover:underline"
-                >
-                  {isGradeManual ? 'Auto Calc' : 'Manual'}
-                </button>
-              </div>
-              <input
-                type="text"
-                value={formData.grade}
-                onChange={(e) => {
-                  setIsGradeManual(true);
-                  setFormData({ ...formData, grade: e.target.value });
-                }}
-                placeholder="e.g. A+"
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm uppercase focus:outline-none focus:border-[#A22538] focus:ring-2 focus:ring-[#A22538]/15"
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+              Prize *
+            </label>
+            <select
+              required
+              value={formData.prize}
+              onChange={(e) =>
+                setFormData({ ...formData, prize: e.target.value as PrizeType })
+              }
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-white font-medium focus:outline-none focus:border-[#A22538] focus:ring-2 focus:ring-[#A22538]/15"
+            >
+              {PRIZE_OPTIONS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -638,8 +571,8 @@ export default function ResultsPage() {
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        title="Edit Result"
-        description="Update student mark, grade, or assessment date."
+        title="Edit Program Result"
+        description="Update program name, prize, or recipient."
       >
         <form onSubmit={handleEditSubmit} className="space-y-4">
           <div>
@@ -657,7 +590,7 @@ export default function ResultsPage() {
               <option value="">Select a student...</option>
               {students.map((st) => (
                 <option key={st.id} value={st.id}>
-                  {st.name} ({st.email})
+                  {st.name} ({st.classes?.name || 'General'})
                 </option>
               ))}
             </select>
@@ -665,48 +598,37 @@ export default function ResultsPage() {
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-              Subject *
+              Program / Event Name *
             </label>
             <input
               type="text"
               required
-              value={formData.subject}
+              value={formData.program_name}
               onChange={(e) =>
-                setFormData({ ...formData, subject: e.target.value })
+                setFormData({ ...formData, program_name: e.target.value })
               }
               className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#A22538] focus:ring-2 focus:ring-[#A22538]/15"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                Score (%)
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                value={formData.score}
-                onChange={(e) => handleScoreChange(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#A22538] focus:ring-2 focus:ring-[#A22538]/15"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                Grade
-              </label>
-              <input
-                type="text"
-                value={formData.grade}
-                onChange={(e) =>
-                  setFormData({ ...formData, grade: e.target.value })
-                }
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm uppercase focus:outline-none focus:border-[#A22538] focus:ring-2 focus:ring-[#A22538]/15"
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+              Prize *
+            </label>
+            <select
+              required
+              value={formData.prize}
+              onChange={(e) =>
+                setFormData({ ...formData, prize: e.target.value as PrizeType })
+              }
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-white font-medium focus:outline-none focus:border-[#A22538] focus:ring-2 focus:ring-[#A22538]/15"
+            >
+              {PRIZE_OPTIONS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -744,21 +666,26 @@ export default function ResultsPage() {
       <Modal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
-        title="Delete Result Record"
+        title="Delete Program Result"
         maxWidth="sm"
       >
         <div className="space-y-4">
           <div className="flex items-center gap-3 p-3 bg-red-50 text-red-800 rounded-lg border border-red-200">
             <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-600" />
             <p className="text-xs leading-relaxed">
-              Are you sure you want to delete this result entry?
+              Are you sure you want to delete this prize record?
             </p>
           </div>
 
           <p className="text-sm text-gray-600">
-            Subject:{' '}
+            Program:{' '}
             <span className="font-semibold text-gray-900">
-              {selectedResult?.subject}
+              {selectedResult?.program_name}
+            </span>
+            <br />
+            Prize:{' '}
+            <span className="font-semibold text-gray-900">
+              {selectedResult?.prize}
             </span>
             <br />
             Student:{' '}
