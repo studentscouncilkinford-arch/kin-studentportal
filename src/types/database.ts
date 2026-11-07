@@ -95,6 +95,23 @@ export interface AchievementItem {
     id: string;
     name: string;
     email: string;
+    class_id?: string | null;
+    classes?: {
+      id: string;
+      name: string;
+      section: string | null;
+    } | null;
+  } | null;
+  students?: {
+    id: string;
+    name: string;
+    email: string;
+    class_id?: string | null;
+    classes?: {
+      id: string;
+      name: string;
+      section: string | null;
+    } | null;
   } | null;
 }
 
