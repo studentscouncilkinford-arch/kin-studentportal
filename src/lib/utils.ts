@@ -67,6 +67,21 @@ export function generateUserEmail(name: string, existingEmails: string[] = []): 
 }
 
 /**
+ * Generates a Kinford user password based on the user's name.
+ * Format: {firstname}@kinford (lowercase, no spaces, no special characters).
+ * Examples:
+ * Name: "Razi" -> razi@kinford
+ * Name: "Abdul Hadi" -> abdulhadi@kinford
+ * Name: "Yousuf" -> yousuf@kinford
+ */
+export function generateUserPassword(name: string): string {
+  const cleanName = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+  return `${cleanName || 'student'}@kinford`;
+}
+
+/**
  * Generates a secure random 8-character password.
  * Mix of uppercase, lowercase, and numbers (e.g., Kf7xR2mN).
  */

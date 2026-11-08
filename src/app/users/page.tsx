@@ -6,9 +6,11 @@ import { supabase } from '@/lib/supabase';
 import type { UserItem, ClassItem, UserType } from '@/types/database';
 import DataTable, { Column } from '@/components/DataTable';
 import Modal from '@/components/Modal';
-import { generateUserEmail, generateRandomPassword } from '@/lib/utils';
+import BulkUploadModal from '@/components/BulkUploadModal';
+import { generateUserEmail, generateUserPassword } from '@/lib/utils';
 import {
   Plus,
+  Upload,
   Search,
   Pencil,
   Trash2,
@@ -45,6 +47,7 @@ export default function UsersPage() {
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
@@ -237,7 +240,7 @@ export default function UsersPage() {
 
       // 2. Auto-generate email and plain password
       const generatedEmail = generateUserEmail(addForm.name.trim(), existingEmails);
-      const plainPassword = generateRandomPassword(8);
+      const plainPassword = generateUserPassword(addForm.name.trim());
       const passwordHash = bcrypt.hashSync(plainPassword, 10);
 
       // 3. Save both password_hash and plain_password to Supabase
@@ -314,7 +317,7 @@ export default function UsersPage() {
 
     setIsSubmitting(true);
     try {
-      const newPlainPassword = generateRandomPassword(8);
+      const newPlainPassword = generateUserPassword(selectedUser.name);
       const newPasswordHash = bcrypt.hashSync(newPlainPassword, 10);
 
       // Update both password_hash and plain_password
@@ -554,13 +557,22 @@ export default function UsersPage() {
             Manage student enrollments and staff access permissions.
           </p>
         </div>
-        <button
-          onClick={handleOpenAdd}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#A22538] hover:bg-[#851b2c] transition-colors shadow-sm self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add User</span>
-        </button>
+        <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap">
+          <button
+            onClick={() => setIsBulkModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-[#A22538] border border-[#A22538] hover:bg-[#A22538]/5 transition-colors shadow-sm"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Bulk Upload</span>
+          </button>
+          <button
+            onClick={handleOpenAdd}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#A22538] hover:bg-[#851b2c] transition-colors shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add User</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -606,6 +618,14 @@ export default function UsersPage() {
             : 'No users created yet. Click "Add User" to get started.'
         }
         keyExtractor={(item) => item.id}
+      />
+
+      {/* Bulk Upload Modal */}
+      <BulkUploadModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        classes={classes}
+        onSuccess={fetchUsers}
       />
 
       {/* Add User Modal */}
