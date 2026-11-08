@@ -59,7 +59,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           pathname === '/dashboard' ||
           pathname.startsWith('/users') ||
           pathname.startsWith('/classes') ||
-          (pathname.startsWith('/achievements') && !pathname.startsWith('/student-dashboard')) ||
           (pathname.startsWith('/results') && !pathname.startsWith('/student-dashboard'))
         ) {
           router.replace('/student-dashboard');

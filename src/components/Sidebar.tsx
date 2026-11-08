@@ -51,7 +51,6 @@ export default function Sidebar() {
       ...(session && 'accessResults' in session && session.accessResults
         ? [{ name: 'Results', href: '/results', icon: ClipboardList }]
         : []),
-      { name: 'Achievements', href: '/achievements', icon: Trophy },
     ];
   } else {
     // Admin
@@ -60,7 +59,6 @@ export default function Sidebar() {
       { name: 'Users', href: '/users', icon: Users },
       { name: 'Classes', href: '/classes', icon: GraduationCap },
       { name: 'Results', href: '/results', icon: ClipboardList },
-      { name: 'Achievements', href: '/achievements', icon: Trophy },
     ];
   }
 
