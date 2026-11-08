@@ -2,6 +2,8 @@
 
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import bcrypt from 'bcryptjs';
 import { supabase } from '@/lib/supabase';
 import type { ClassItem, UserType } from '@/types/database';
@@ -305,30 +307,81 @@ export default function BulkUploadModal({
     }
   };
 
-  // Download Credentials as CSV
-  const handleDownloadCredentials = () => {
+  // Download Credentials as PDF
+  const handleDownloadCredentialsPDF = () => {
     if (createdUsers.length === 0) return;
 
-    let csvContent = 'Name,Email,Password\n';
-    createdUsers.forEach((u) => {
-      // Escape commas and quotes if needed
-      const safeName = `"${u.name.replace(/"/g, '""')}"`;
-      csvContent += `${safeName},${u.email},${u.password}\n`;
-    });
+    try {
+      const doc = new jsPDF();
+      const formattedType = userType === 'student' ? 'Student' : 'Staff';
+      const className =
+        userType === 'student' && selectedClass
+          ? `${selectedClass.name}${selectedClass.section ? ` (${selectedClass.section})` : ''}`
+          : undefined;
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute(
-      'download',
-      `kinford-${userType}-credentials-${new Date().toISOString().split('T')[0]}.csv`
-    );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success('Downloaded credentials CSV!');
+      // Header
+      doc.setFontSize(22);
+      doc.setTextColor(162, 37, 56); // maroon #A22538
+      doc.text('Kinford', 14, 20);
+
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`${formattedType} Login Credentials`, 14, 30);
+
+      if (className) {
+        doc.setFontSize(11);
+        doc.setTextColor(60, 60, 60);
+        doc.text(`Class: ${className}`, 14, 37);
+      }
+
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text(
+        `Generated on ${new Date().toLocaleDateString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        })}`,
+        14,
+        className ? 44 : 37
+      );
+
+      // Table
+      autoTable(doc, {
+        startY: className ? 50 : 43,
+        head: [['#', 'Name', 'Email', 'Password']],
+        body: createdUsers.map((u, i) => [i + 1, u.name, u.email, u.password]),
+        headStyles: {
+          fillColor: [162, 37, 56], // maroon #A22538
+          textColor: 255,
+          fontStyle: 'bold',
+        },
+        alternateRowStyles: {
+          fillColor: [249, 249, 249],
+        },
+        styles: {
+          fontSize: 10,
+          cellPadding: 4,
+        },
+      });
+
+      // Footer
+      const pageHeight = doc.internal.pageSize.height;
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(
+        'Kinford Student Portal — studentportal.kinfordstudentscouncil.com',
+        14,
+        pageHeight - 15
+      );
+      doc.text('Keep these credentials confidential', 14, pageHeight - 10);
+
+      doc.save(`${userType.toLowerCase()}-credentials.pdf`);
+      toast.success('Downloaded credentials PDF!');
+    } catch (err: unknown) {
+      console.error('Failed to generate PDF:', err);
+      toast.error('Failed to generate PDF');
+    }
   };
 
   // Copy All Credentials to clipboard
@@ -612,15 +665,15 @@ export default function BulkUploadModal({
             </p>
           </div>
 
-          {/* Buttons: Download CSV, Copy Credentials */}
+          {/* Buttons: Download PDF, Copy Credentials */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
               type="button"
-              onClick={handleDownloadCredentials}
+              onClick={handleDownloadCredentialsPDF}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 border border-gray-200 transition-colors"
             >
               <Download className="w-4 h-4" />
-              <span>Download Credentials (.csv)</span>
+              <span>Download Credentials (.pdf)</span>
             </button>
 
             <button
